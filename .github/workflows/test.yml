@@ -1,0 +1,64 @@
+name: test
+
+# Controls when the workflow will run
+on:
+  push:
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  first:
+    runs-on: ubuntu-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      - name: step0
+        run: |
+          debug_dir=$(mktemp -d)
+          debug_script="$debug_dir/debug-summary"
+          cat <<"EOF" > $debug_script
+          #!/bin/sh
+          ls -hal $GITHUB_STEP_SUMMARY
+          cat $GITHUB_STEP_SUMMARY
+          EOF
+          chmod +x $debug_script
+          echo $debug_dir >> $GITHUB_PATH
+      - name: step1
+        run: |
+          echo "output1=from-step1" >> $GITHUB_STEP_SUMMARY
+          debug-summary
+
+      - name: step2 shim-action
+        run: |
+            cat <<"EOF" > action.yml
+            name: test
+            outputs:
+              empty-action-output:
+                description: empty
+                value: ''
+            
+            runs:
+              using: composite
+              steps:
+              - name: composite step1
+                shell: bash
+                run: |
+                  echo "output2=from-composite-step1" >> $GITHUB_STEP_SUMMARY
+                  debug-summary
+              - name: composite step2
+                shell: bash
+                run: |
+                  echo "output3=from-composite-step2" >> $GITHUB_STEP_SUMMARY
+                  debug-summary
+            EOF
+
+      - name: step3 call-action
+        uses: ./
+        id: step3
+
+      - name: step4
+        env:
+          outputs: ${{ toJSON(steps.step3.outputs) }}
+        run: |
+          echo "$outputs" >> $GITHUB_STEP_SUMMARY
+          debug-summary
